@@ -324,13 +324,13 @@
     <value>The _type parameter must be included when using the _typeFilter parameter. </value>
     <comment>Export job parameter exception messsage</comment>
   </data>
-  <data name="ContainerRegistryNotConfigured" xml:space="preserve">
-    <value>The container registry '{0}' is not configured.</value>
+  <data name="ContainerRegistryArtifactNotConfigured" xml:space="preserve">
+    <value>The container registry artifact '{0}' is not configured.</value>
     <comment>{0}: the container registry login server</comment>
   </data>
   <data name="ConfigLocationRequiredForAnonymizedExport" xml:space="preserve">
     <value>Missing '_anonymizationConfig' for anonymized export</value>
-     <comment>{NumberedPlaceHolder="_anonymizationConfig"}</comment>
+    <comment>{NumberedPlaceHolder="_anonymizationConfig"}</comment>
   </data>
   <data name="ProfileIsInvalid" xml:space="preserve">
     <value>Provided value for `profile` parameter `{0}` is invalid </value>

@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using Microsoft.Health.Fhir.Core.Features.Operations.ConvertData.Models;
 using Microsoft.Health.Fhir.TemplateManagement.Models;
 
 namespace Microsoft.Health.Fhir.Core.Configs
@@ -19,7 +20,13 @@ namespace Microsoft.Health.Fhir.Core.Configs
         /// <summary>
         /// Determines the registered container registry list.
         /// </summary>
+        /// [Obsolete("Will be replaced by AcrArtifacts property")]
         public List<string> ContainerRegistryServers { get; } = new List<string>();
+
+        /// <summary>
+        /// Determines the registered ACR artifact list.
+        /// </summary>
+        public List<ContainerRegistryArtifact> Artifacts { get; } = new List<ContainerRegistryArtifact>();
 
         /// <summary>
         /// ArmResourceManagerId to aquire AAD token for ACR access token since ACR is not an AAD resource.

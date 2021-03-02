@@ -115,11 +115,11 @@ namespace Microsoft.Health.Fhir.Api {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The container registry &apos;{0}&apos; is not configured..
+        ///   Looks up a localized string similar to The container registry artifact &apos;{0}&apos; is not configured..
         /// </summary>
-        public static string ContainerRegistryNotConfigured {
+        public static string ContainerRegistryArtifactNotConfigured {
             get {
-                return ResourceManager.GetString("ContainerRegistryNotConfigured", resourceCulture);
+                return ResourceManager.GetString("ContainerRegistryArtifactNotConfigured", resourceCulture);
             }
         }
         

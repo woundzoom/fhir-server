@@ -39,6 +39,8 @@ namespace Microsoft.Health.Fhir.Api.Controllers
         private static HashSet<string> _supportedParams = GetSupportedParams();
 
         private const char ImageRegistryDelimiter = '/';
+        private const char ImageTagDelimiter = ':';
+        private const char ImageDigestDelimiter = '@';
 
         public ConvertDataController(
             IMediator mediator,
@@ -77,13 +79,13 @@ namespace Microsoft.Health.Fhir.Api.Controllers
 
             // Validate template registry has been configured.
             bool isDefaultTemplateReference = IsDefaultTemplateReference(templateCollectionReference);
-            string registryServer = ExtractRegistryServer(templateCollectionReference);
+            ContainerRegistryArtifact artifactInfo = ExtractArtifactInfo(templateCollectionReference);
             if (!isDefaultTemplateReference)
             {
-                CheckIfRegistryIsConfigured(registryServer);
+                CheckIfArtifactIsConfigured(artifactInfo, templateCollectionReference);
             }
 
-            var convertDataRequest = new ConvertDataRequest(inputData, inputDataType, registryServer, isDefaultTemplateReference, templateCollectionReference, rootTemplate);
+            var convertDataRequest = new ConvertDataRequest(inputData, inputDataType, artifactInfo.LoginServer, isDefaultTemplateReference, templateCollectionReference, rootTemplate);
             ConvertDataResponse response = await _mediator.Send(convertDataRequest, cancellationToken: default);
 
             return new ContentResult
@@ -94,12 +96,12 @@ namespace Microsoft.Health.Fhir.Api.Controllers
         }
 
         /// <summary>
-        /// Extract the first component from the image reference in the format of "dockerregistry.io/fedora/httpd:version1.0"
+        /// Extract the artifact information from the image reference in the format of "dockerregistry.io/fedora/httpd:version1.0"
         /// Reference format: https://docs.docker.com/engine/reference/commandline/tag/#extended-description
         /// </summary>
         /// <param name="templateCollectionReference">A string of image reference.</param>
         /// <returns>Registry server.</returns>
-        private string ExtractRegistryServer(string templateCollectionReference)
+        private ContainerRegistryArtifact ExtractArtifactInfo(string templateCollectionReference)
         {
             var referenceComponents = templateCollectionReference.Split(ImageRegistryDelimiter);
             if (referenceComponents.Length <= 1 || string.IsNullOrWhiteSpace(referenceComponents.First()))
@@ -108,7 +110,30 @@ namespace Microsoft.Health.Fhir.Api.Controllers
                 throw new RequestNotValidException(string.Format(Resources.InvalidTemplateCollectionReference, templateCollectionReference));
             }
 
-            return referenceComponents[0];
+            var loginServer = referenceComponents[0];
+
+            var digestComponents = referenceComponents[1].Split(ImageDigestDelimiter);
+            if (digestComponents.Length > 2
+                || string.IsNullOrWhiteSpace(digestComponents[0]))
+            {
+                _logger.LogInformation("Templates collection reference is invalid: registry server missing.");
+                throw new RequestNotValidException(string.Format(Resources.InvalidTemplateCollectionReference, templateCollectionReference));
+            }
+
+            var imageName = digestComponents[0];
+            var tagIndex = imageName.IndexOf(ImageTagDelimiter, StringComparison.OrdinalIgnoreCase);
+            if (digestComponents.Length == 1 && tagIndex >= 0)
+            {
+                imageName = imageName.Substring(0, tagIndex);
+            }
+
+            var digestInfo = digestComponents.Length == 2 ? digestComponents[1] : null;
+            return new ContainerRegistryArtifact
+            {
+                LoginServer = loginServer,
+                ImageName = imageName,
+                Digest = digestInfo,
+            };
         }
 
         private void ValidateParams(Parameters inputParams)
@@ -175,13 +200,13 @@ namespace Microsoft.Health.Fhir.Api.Controllers
             return string.Equals(ImageInfo.DefaultTemplateImageReference, templateReference, StringComparison.OrdinalIgnoreCase);
         }
 
-        private void CheckIfRegistryIsConfigured(string registryServer)
+        private void CheckIfArtifactIsConfigured(ContainerRegistryArtifact targetArtifact, string imageReference)
         {
-            if (!_config.ContainerRegistryServers.Any(server =>
-                string.Equals(server, registryServer, StringComparison.OrdinalIgnoreCase)))
+            if (!_config.ContainerRegistryServers.Any(server => string.Equals(server, targetArtifact.LoginServer, StringComparison.OrdinalIgnoreCase))
+                && !_config.Artifacts.Any(artifact => artifact.Contains(targetArtifact)))
             {
-                _logger.LogError("The requested ACR server is not configured.");
-                throw new ContainerRegistryNotConfiguredException(string.Format(Resources.ContainerRegistryNotConfigured, registryServer));
+                _logger.LogError("The requested ACR artifact is not configured.");
+                throw new ContainerRegistryNotConfiguredException(string.Format(Resources.ContainerRegistryArtifactNotConfigured, imageReference));
             }
         }
 
