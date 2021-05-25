@@ -198,7 +198,7 @@ namespace Microsoft.Health.Fhir.Core.Features.Search
                     element.GetType());
             }
 
-            Debug.Assert(extractedValues != null, "The extracted values should not be null.");
+            Debug.Assert(!extractedValues.Any(), "The extracted values should not be null.");
 
             // If there is target set, then filter the extracted values to only those types.
             if (searchParameterType == SearchParamType.Reference &&
