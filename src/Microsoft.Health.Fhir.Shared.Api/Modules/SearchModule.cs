@@ -3,6 +3,7 @@
 // Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // -------------------------------------------------------------------------------------------------
 
+using System.Linq;
 using EnsureThat;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -58,7 +59,8 @@ namespace Microsoft.Health.Fhir.Api.Modules
                 .AsSelf()
                 .AsService<ISearchParameterDefinitionManager>()
                 .AsService<IHostedService>()
-                .ReplaceService<INotificationHandler<SearchParametersUpdated>>();
+                .ReplaceService<INotificationHandler<SearchParametersUpdatedNotification>>()
+                .ReplaceService<INotificationHandler<StorageInitializedNotification>>();
 
             services.Add<SearchableSearchParameterDefinitionManager>()
                 .Singleton()
@@ -79,12 +81,7 @@ namespace Microsoft.Health.Fhir.Api.Modules
             services.Add<SearchParameterStatusManager>()
                 .Singleton()
                 .AsSelf()
-                .ReplaceService<INotificationHandler<StorageInitializedNotification>>();
-
-            services.Add<SearchParameterResourceDataStore>()
-                .Singleton()
-                .AsSelf()
-                .ReplaceService<INotificationHandler<StorageInitializedNotification>>();
+                .ReplaceService<INotificationHandler<SearchParameterDefinitionManagerInitialized>>();
 
             services.Add<SearchParameterSupportResolver>()
                 .Singleton()
@@ -93,8 +90,10 @@ namespace Microsoft.Health.Fhir.Api.Modules
 
             // TypedElement based converters
             // These always need to be added as they are also used by the SearchParameterSupportResolver
+            // Exclude the extension converter, since it will be dynamically created by the converter manager
             services.TypesInSameAssemblyAs<ITypedElementToSearchValueConverter>()
                 .AssignableTo<ITypedElementToSearchValueConverter>()
+                .Where(t => t.Type != typeof(FhirTypedElementToSearchValueConverterManager.ExtensionConverter))
                 .Singleton()
                 .AsService<ITypedElementToSearchValueConverter>();
 

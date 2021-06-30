@@ -16,6 +16,7 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using Microsoft.Health.Abstractions.Exceptions;
 using Microsoft.Health.Core;
 using Microsoft.Health.Core.Features.Context;
 using Microsoft.Health.Extensions.DependencyInjection;
@@ -177,6 +178,10 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Export
                 // but we will not be updating the job record.
                 _logger.LogTrace("The job was updated by another process.");
             }
+            catch (RequestRateExceededException)
+            {
+                _logger.LogTrace("Job failed due to RequestRateExceeded.");
+            }
             catch (DestinationConnectionException dce)
             {
                 _logger.LogError(dce, "Can't connect to destination. The job will be marked as failed.");
@@ -196,6 +201,13 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Export
                 _logger.LogError(ex, "Failed to parse anonymization configuration. The job will be marked as failed.");
 
                 _exportJobRecord.FailureDetails = new JobFailureDetails(ex.Message, HttpStatusCode.BadRequest);
+                await CompleteJobAsync(OperationStatus.Failed, cancellationToken);
+            }
+            catch (FailedToAnonymizeResourceException ex)
+            {
+                _logger.LogError(ex, "Failed to anonymize resource. The job will be marked as failed.");
+
+                _exportJobRecord.FailureDetails = new JobFailureDetails(string.Format(Resources.FailedToAnonymizeResource, ex.Message), HttpStatusCode.BadRequest);
                 await CompleteJobAsync(OperationStatus.Failed, cancellationToken);
             }
             catch (AnonymizationConfigurationNotFoundException ex)
@@ -619,7 +631,14 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Export
 
                 if (anonymizer != null)
                 {
-                    element = anonymizer.Anonymize(element);
+                    try
+                    {
+                        element = anonymizer.Anonymize(element);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new FailedToAnonymizeResourceException(ex.Message, ex);
+                    }
                 }
 
                 // Serialize into NDJson and write to the file.

@@ -122,6 +122,10 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Reindex
                         _throttleController.Initialize(_reindexJobRecord, provisionedCapacity);
                     }
                 }
+                else
+                {
+                    _throttleController.Initialize(_reindexJobRecord, null);
+                }
 
                 // If we are resuming a job, we can detect that by checking the progress info from the job record.
                 // If no queries have been added to the progress then this is a new job
@@ -158,6 +162,10 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Reindex
                 // The reindex job was updated externally.
                 _logger.LogInformation("The job was updated by another process.");
             }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("The reindex job was canceled.");
+            }
             catch (Exception ex)
             {
                 await HandleException(ex);
@@ -173,7 +181,43 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Reindex
         {
             // Build query based on new search params
             // Find supported, but not yet searchable params
-            var notYetIndexedParams = _supportedSearchParameterDefinitionManager.GetSearchParametersRequiringReindexing();
+            var possibleNotYetIndexedParams = _supportedSearchParameterDefinitionManager.GetSearchParametersRequiringReindexing();
+            var notYetIndexedParams = new List<SearchParameterInfo>();
+
+            var resourceList = new HashSet<string>();
+
+            // filter list of SearchParameters by the target resource types
+            if (_reindexJobRecord.TargetResourceTypes.Any())
+            {
+                foreach (var searchParam in possibleNotYetIndexedParams)
+                {
+                    var searchParamResourceTypes = GetDerivedResourceTypes(searchParam.BaseResourceTypes);
+                    var matchingResourceTypes = searchParamResourceTypes.Intersect(_reindexJobRecord.TargetResourceTypes);
+                    if (matchingResourceTypes.Any())
+                    {
+                        notYetIndexedParams.Add(searchParam);
+
+                        // add matching resource types to the set of resource types which we will reindex
+                        resourceList.UnionWith(matchingResourceTypes);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Search parameter {url} is not being reindexed as it does not match the target types of reindex job {reindexid}.", searchParam.Url, _reindexJobRecord.Id);
+                    }
+                }
+            }
+            else
+            {
+                notYetIndexedParams.AddRange(possibleNotYetIndexedParams);
+
+                // From the param list, get the list of necessary resources which should be
+                // included in our query
+                foreach (var param in notYetIndexedParams)
+                {
+                    var searchParamResourceTypes = GetDerivedResourceTypes(param.BaseResourceTypes);
+                    resourceList.UnionWith(searchParamResourceTypes);
+                }
+            }
 
             // if there are not any parameters which are supported but not yet indexed, then we have nothing to do
             if (!notYetIndexedParams.Any())
@@ -182,49 +226,18 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Reindex
                     OperationOutcomeConstants.IssueSeverity.Information,
                     OperationOutcomeConstants.IssueType.Informational,
                     Resources.NoSearchParametersNeededToBeIndexed));
-                _reindexJobRecord.CanceledTime = DateTimeOffset.UtcNow;
+                _reindexJobRecord.CanceledTime = Clock.UtcNow;
                 await MoveToFinalStatusAsync(OperationStatus.Canceled);
                 return false;
             }
 
-            // From the param list, get the list of necessary resources which should be
-            // included in our query
-            var resourceList = new HashSet<string>();
-            foreach (var param in notYetIndexedParams)
-            {
-                foreach (var baseResourceType in param.BaseResourceTypes)
-                {
-                    if (baseResourceType == KnownResourceTypes.Resource)
-                    {
-                        resourceList.UnionWith(_modelInfoProvider.GetResourceTypeNames().ToHashSet());
-
-                        // We added all possible resource types, so no need to continue
-                        break;
-                    }
-
-                    if (baseResourceType == KnownResourceTypes.DomainResource)
-                    {
-                        var domainResourceChildResourceTypes = _modelInfoProvider.GetResourceTypeNames().ToHashSet();
-
-                        // Remove types that inherit from Resource directly
-                        domainResourceChildResourceTypes.Remove(KnownResourceTypes.Binary);
-                        domainResourceChildResourceTypes.Remove(KnownResourceTypes.Bundle);
-                        domainResourceChildResourceTypes.Remove(KnownResourceTypes.Parameters);
-
-                        resourceList.UnionWith(domainResourceChildResourceTypes);
-                    }
-                    else
-                    {
-                        resourceList.UnionWith(new[] { baseResourceType });
-                    }
-                }
-            }
-
+            // Save the list of resource types in the reindexjob document
             foreach (var resource in resourceList)
             {
                 _reindexJobRecord.Resources.Add(resource);
             }
 
+            // save the list of search parameters to the reindexjob document
             foreach (var searchParams in notYetIndexedParams.Select(p => p.Url.ToString()))
             {
                 _reindexJobRecord.SearchParams.Add(searchParams);
@@ -314,6 +327,11 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Reindex
                     CancellationTokenSource queryTokensSource = new CancellationTokenSource();
                     queryCancellationTokens.TryAdd(query, queryTokensSource);
 
+                    // We don't await ProcessQuery, so query status can or can not be changed inside immediately
+                    // In some cases we can go th6rough whole loop and pick same query from query list.
+                    // To prevent that we marking query as running here and not inside ProcessQuery code.
+                    query.Status = OperationStatus.Running;
+                    query.LastModified = Clock.UtcNow;
 #pragma warning disable CS4014 // Suppressed as we want to continue execution and begin processing the next query while this continues to run
                     queryTasks.Add(ProcessQueryAsync(query, queryTokensSource.Token));
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
@@ -371,15 +389,41 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Reindex
                     }
                 }
 
-                // if our received CancellationToken is cancelled we should
+                // for most cases if another process updates the job (such as a DELETE request)
+                // the _etag change will cause a JobConflict exception and this task will be aborted
+                // but here we add one more check before attempting to mark the job as complete,
+                // or starting another iteration of the loop
+                await _jobSemaphore.WaitAsync();
+                try
+                {
+                    using (IScoped<IFhirOperationDataStore> store = _fhirOperationDataStoreFactory.Invoke())
+                    {
+                        var wrapper = await store.Value.GetReindexJobByIdAsync(_reindexJobRecord.Id, _cancellationToken);
+                        _weakETag = wrapper.ETag;
+                        _reindexJobRecord.Status = wrapper.JobRecord.Status;
+                    }
+                }
+                catch (Exception)
+                {
+                    // if something went wrong with fetching job status, we shouldn't fail process loop.
+                }
+                finally
+                {
+                    _jobSemaphore.Release();
+                }
+
+                // if our received CancellationToken is cancelled, or the job has been marked canceled we should
                 // pass that cancellation request onto all the cancellationTokens
                 // for the currently executing threads
-                if (_cancellationToken.IsCancellationRequested)
+                if (_cancellationToken.IsCancellationRequested || _reindexJobRecord.Status == OperationStatus.Canceled)
                 {
                     foreach (var tokenSource in queryCancellationTokens.Values)
                     {
                         tokenSource.Cancel(false);
                     }
+
+                    _logger.LogInformation("Reindex Job canceled.");
+                    throw new OperationCanceledException("ReindexJob canceled.");
                 }
             }
 
@@ -395,14 +439,12 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Reindex
                 await _jobSemaphore.WaitAsync(cancellationToken);
                 try
                 {
-                    query.Status = OperationStatus.Running;
-                    query.LastModified = DateTimeOffset.UtcNow;
-
                     // Query first batch of resources
                     results = await ExecuteReindexQueryAsync(query, countOnly: false, cancellationToken);
 
-                    // if continuation token then update next query
-                    if (!string.IsNullOrEmpty(results?.ContinuationToken))
+                    // If continuation token then update next query but only if parent query haven't been in pipeline.
+                    // For cases like retry or stale query we don't want to start another chain.
+                    if (!string.IsNullOrEmpty(results?.ContinuationToken) && !query.CreatedChild)
                     {
                         var encodedContinuationToken = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(results.ContinuationToken));
                         var nextQuery = new ReindexJobQueryStatus(query.ResourceType, encodedContinuationToken)
@@ -411,6 +453,7 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Reindex
                             Status = OperationStatus.Queued,
                         };
                         _reindexJobRecord.QueryList.TryAdd(nextQuery, 1);
+                        query.CreatedChild = true;
                     }
 
                     await UpdateJobAsync();
@@ -595,7 +638,21 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Reindex
 
         private async Task UpdateParametersAndCompleteJob()
         {
-            (bool success, string error) = await _reindexUtilities.UpdateSearchParameterStatus(_reindexJobRecord.SearchParams.ToList(), _cancellationToken);
+            // here we check if all the resource types which are base types of the search parameter
+            // were reindexed by this job.  If so, then we should mark the search parameters
+            // as fully reindexed
+            var fullyIndexexParams = new List<string>();
+            var reindexedResourcesSet = new HashSet<string>(_reindexJobRecord.Resources);
+            foreach (var searchParam in _reindexJobRecord.SearchParams)
+            {
+                var searchParamInfo = _supportedSearchParameterDefinitionManager.GetSearchParameter(new Uri(searchParam));
+                if (reindexedResourcesSet.IsSupersetOf(searchParamInfo.BaseResourceTypes))
+                {
+                    fullyIndexexParams.Add(searchParam);
+                }
+            }
+
+            (bool success, string error) = await _reindexUtilities.UpdateSearchParameterStatus(fullyIndexexParams, _cancellationToken);
 
             if (success)
             {
@@ -613,6 +670,36 @@ namespace Microsoft.Health.Fhir.Core.Features.Operations.Reindex
 
                 await MoveToFinalStatusAsync(OperationStatus.Failed);
             }
+        }
+
+        private ICollection<string> GetDerivedResourceTypes(IReadOnlyCollection<string> resourceTypes)
+        {
+            var completeResourceList = new HashSet<string>(resourceTypes);
+
+            foreach (var baseResourceType in resourceTypes)
+            {
+                if (baseResourceType == KnownResourceTypes.Resource)
+                {
+                    completeResourceList.UnionWith(_modelInfoProvider.GetResourceTypeNames().ToHashSet());
+
+                    // We added all possible resource types, so no need to continue
+                    break;
+                }
+
+                if (baseResourceType == KnownResourceTypes.DomainResource)
+                {
+                    var domainResourceChildResourceTypes = _modelInfoProvider.GetResourceTypeNames().ToHashSet();
+
+                    // Remove types that inherit from Resource directly
+                    domainResourceChildResourceTypes.Remove(KnownResourceTypes.Binary);
+                    domainResourceChildResourceTypes.Remove(KnownResourceTypes.Bundle);
+                    domainResourceChildResourceTypes.Remove(KnownResourceTypes.Parameters);
+
+                    completeResourceList.UnionWith(domainResourceChildResourceTypes);
+                }
+            }
+
+            return completeResourceList;
         }
 
         public void Dispose()

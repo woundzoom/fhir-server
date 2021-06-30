@@ -16,9 +16,9 @@
         }
     ],
     "kind": [ "capability" ],
-    "fhirVersion": "4.0.0",
     "format": [
-        "application/fhir+json"
+        "application/fhir+json",
+        "json"
     ],
     "rest": [
         {

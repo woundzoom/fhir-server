@@ -38,7 +38,7 @@ namespace Microsoft.Health.Fhir.Api.Features.Resources.Bundle
 
             writer.WriteStartObject();
 
-            writer.WriteString("resourceType", bundle.ResourceType.GetLiteral());
+            writer.WriteString("resourceType", bundle.TypeName);
             writer.WriteString("id", bundle.Id);
 
             SerializeMetadata();
@@ -145,6 +145,7 @@ namespace Microsoft.Health.Fhir.Api.Features.Resources.Bundle
                         {
                             writer.WriteStartObject("response");
 
+                            writer.WriteString("status", rawBundleEntry.Response.Status);
                             writer.WriteString("etag", rawBundleEntry.Response.Etag);
                             writer.WriteString("lastModified", rawBundleEntry.Response.LastModified?.ToInstantString());
 

@@ -1,22 +1,27 @@
 {
-   // Use IntelliSense to find out which attributes exist for C# debugging
-   // Use hover for the description of the existing attributes
-   // For further information visit https://github.com/OmniSharp/omnisharp-vscode/blob/master/debugger-launchjson.md
-   "version": "0.2.0",
-   "configurations": [
+    // Use IntelliSense to find out which attributes exist for C# debugging
+    // Use hover for the description of the existing attributes
+    // For further information visit https://github.com/OmniSharp/omnisharp-vscode/blob/master/debugger-launchjson.md
+    "version": "0.2.0",
+    "configurations": [
         {
             "name": "R4 Cosmos DB",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "buildR4",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.R4.Web/bin/Debug/netcoreapp3.1/Microsoft.Health.Fhir.R4.Web.dll",
+            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.R4.Web/bin/Debug/net5.0/Microsoft.Health.Fhir.R4.Web.dll",
             "args": [],
             "cwd": "${workspaceFolder}/src/Microsoft.Health.Fhir.R4.Web",
             "stopAtEntry": false,
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
-                "DataStore": "CosmosDb"
+                "DataStore": "CosmosDb",
+                "FhirServer:Security:Enabled": "false",
+                // Not a real secret!
+                // https://docs.microsoft.com/en-us/azure/cosmos-db/local-emulator?tabs=ssl-netstd21#authenticate-requests
+                "CosmosDb:Host": "https://localhost:8081/",
+                "CosmosDb:Key": "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==",
             },
             "sourceFileMap": {
                 "/Views": "${workspaceFolder}/Views"
@@ -28,7 +33,7 @@
             "request": "launch",
             "preLaunchTask": "buildR4",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.R4.Web/bin/Debug/netcoreapp3.1/Microsoft.Health.Fhir.R4.Web.dll",
+            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.R4.Web/bin/Debug/net5.0/Microsoft.Health.Fhir.R4.Web.dll",
             "args": [],
             "cwd": "${workspaceFolder}/src/Microsoft.Health.Fhir.R4.Web",
             "stopAtEntry": false,
@@ -40,6 +45,7 @@
                 "SqlServer:Initialize": "true",
                 "SqlServer:SchemaOptions:AutomaticUpdatesEnabled": "true",
                 "TestAuthEnvironment:FilePath": "..//..//testauthenvironment.json",
+                "FhirServer:Security:Enabled": "false",
             },
             "sourceFileMap": {
                 "/Views": "${workspaceFolder}/Views"
@@ -51,13 +57,18 @@
             "request": "launch",
             "preLaunchTask": "buildSTU3",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.Stu3.Web/bin/Debug/netcoreapp3.1/Microsoft.Health.Fhir.Stu3.Web.dll",
+            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.Stu3.Web/bin/Debug/net5.0/Microsoft.Health.Fhir.Stu3.Web.dll",
             "args": [],
             "cwd": "${workspaceFolder}/src/Microsoft.Health.Fhir.Stu3.Web",
             "stopAtEntry": false,
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
-                "DataStore": "CosmosDb"
+                "DataStore": "CosmosDb",
+                "FhirServer:Security:Enabled": "false",
+                // Not a real secret!
+                // https://docs.microsoft.com/en-us/azure/cosmos-db/local-emulator?tabs=ssl-netstd21#authenticate-requests
+                "CosmosDb:Host": "https://localhost:8081/",
+                "CosmosDb:Key": "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==",
             },
             "sourceFileMap": {
                 "/Views": "${workspaceFolder}/Views"
@@ -69,7 +80,7 @@
             "request": "launch",
             "preLaunchTask": "buildSTU3",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.Stu3.Web/bin/Debug/netcoreapp3.1/Microsoft.Health.Fhir.Stu3.Web.dll",
+            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.Stu3.Web/bin/Debug/net5.0/Microsoft.Health.Fhir.Stu3.Web.dll",
             "args": [],
             "cwd": "${workspaceFolder}/src/Microsoft.Health.Fhir.Stu3.Web",
             "stopAtEntry": false,
@@ -81,6 +92,7 @@
                 "SqlServer:SchemaOptions:AutomaticUpdatesEnabled": "true",
                 "SqlServer:Initialize": "true",
                 "TestAuthEnvironment:FilePath": "..//..//testauthenvironment.json",
+                "FhirServer:Security:Enabled": "false",
             },
             "sourceFileMap": {
                 "/Views": "${workspaceFolder}/Views"
@@ -92,13 +104,18 @@
             "request": "launch",
             "preLaunchTask": "buildR5",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.R5.Web/bin/Debug/netcoreapp3.1/Microsoft.Health.Fhir.R5.Web.dll",
+            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.R5.Web/bin/Debug/net5.0/Microsoft.Health.Fhir.R5.Web.dll",
             "args": [],
             "cwd": "${workspaceFolder}/src/Microsoft.Health.Fhir.R5.Web",
             "stopAtEntry": false,
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
-                "DataStore": "CosmosDb"
+                "DataStore": "CosmosDb",
+                "FhirServer:Security:Enabled": "false",
+                // Not a real secret!
+                // https://docs.microsoft.com/en-us/azure/cosmos-db/local-emulator?tabs=ssl-netstd21#authenticate-requests
+                "CosmosDb:Host": "https://localhost:8081/",
+                "CosmosDb:Key": "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==",
             },
             "sourceFileMap": {
                 "/Views": "${workspaceFolder}/Views"
@@ -110,7 +127,7 @@
             "request": "launch",
             "preLaunchTask": "buildR5",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.R5.Web/bin/Debug/netcoreapp3.1/Microsoft.Health.Fhir.R5.Web.dll",
+            "program": "${workspaceFolder}/src/Microsoft.Health.Fhir.R5.Web/bin/Debug/net5.0/Microsoft.Health.Fhir.R5.Web.dll",
             "args": [],
             "cwd": "${workspaceFolder}/src/Microsoft.Health.Fhir.R5.Web",
             "stopAtEntry": false,
@@ -122,6 +139,7 @@
                 "SqlServer:Initialize": "true",
                 "SqlServer:SchemaOptions:AutomaticUpdatesEnabled": "true",
                 "TestAuthEnvironment:FilePath": "..//..//testauthenvironment.json",
+                "FhirServer:Security:Enabled": "false",
             },
             "sourceFileMap": {
                 "/Views": "${workspaceFolder}/Views"

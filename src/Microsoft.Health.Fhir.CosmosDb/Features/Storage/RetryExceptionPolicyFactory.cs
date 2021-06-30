@@ -36,9 +36,9 @@ namespace Microsoft.Health.Fhir.CosmosDb.Features.Storage
 
             _bundleActionRetryPolicy = configuration.IndividualBatchActionRetryOptions.MaxNumberOfRetries > 0
                 ? CreateExtendedRetryPolicy(configuration.IndividualBatchActionRetryOptions.MaxNumberOfRetries / configuration.RetryOptions.MaxNumberOfRetries, configuration.IndividualBatchActionRetryOptions.MaxWaitTimeInSeconds)
-                : (AsyncPolicy)Policy.NoOpAsync();
+                : Policy.NoOpAsync();
 
-            _backgroundJobRetryPolicy = CreateExtendedRetryPolicy(3, configuration.RetryOptions.MaxWaitTimeInSeconds * 3);
+            _backgroundJobRetryPolicy = CreateExtendedRetryPolicy(100, -1);
         }
 
         public AsyncPolicy RetryPolicy

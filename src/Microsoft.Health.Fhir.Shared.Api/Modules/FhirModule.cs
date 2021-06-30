@@ -17,14 +17,12 @@ using Microsoft.Extensions.Options;
 using Microsoft.Health.Core.Features.Context;
 using Microsoft.Health.Core.Features.Security;
 using Microsoft.Health.Extensions.DependencyInjection;
-using Microsoft.Health.Fhir.Api.Configs;
 using Microsoft.Health.Fhir.Api.Features.Context;
 using Microsoft.Health.Fhir.Api.Features.Filters;
 using Microsoft.Health.Fhir.Api.Features.Formatters;
 using Microsoft.Health.Fhir.Api.Features.Resources;
 using Microsoft.Health.Fhir.Api.Features.Resources.Bundle;
 using Microsoft.Health.Fhir.Core.Extensions;
-using Microsoft.Health.Fhir.Core.Features;
 using Microsoft.Health.Fhir.Core.Features.Conformance;
 using Microsoft.Health.Fhir.Core.Features.Context;
 using Microsoft.Health.Fhir.Core.Features.Persistence;
@@ -38,20 +36,14 @@ namespace Microsoft.Health.Fhir.Api.Modules
     /// </summary>
     public class FhirModule : IStartupModule
     {
-        private readonly FeatureConfiguration _featureConfiguration;
-
-        public FhirModule(FhirServerConfiguration fhirServerConfiguration)
-        {
-            EnsureArg.IsNotNull(fhirServerConfiguration, nameof(fhirServerConfiguration));
-            _featureConfiguration = fhirServerConfiguration.Features;
-        }
-
         /// <inheritdoc />
         public void Load(IServiceCollection services)
         {
             EnsureArg.IsNotNull(services, nameof(services));
 
-            var jsonParser = new FhirJsonParser(DefaultParserSettings.Settings);
+#pragma warning disable CS0618 // Type or member is obsolete
+            var jsonParser = new FhirJsonParser(new ParserSettings() { PermissiveParsing = true, TruncateDateTimeToDate = true });
+#pragma warning restore CS0618 // Type or member is obsolete
             var jsonSerializer = new FhirJsonSerializer();
 
             var xmlParser = new FhirXmlParser();
@@ -81,7 +73,6 @@ namespace Microsoft.Health.Fhir.Api.Modules
                         FhirResourceFormat.Json, (str, version, lastModified) =>
                         {
                             var resource = jsonParser.Parse<Resource>(str);
-
                             return SetMetadata(resource, version, lastModified);
                         }
                     },

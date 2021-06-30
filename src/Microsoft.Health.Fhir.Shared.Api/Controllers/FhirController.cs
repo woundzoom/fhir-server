@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -363,9 +364,47 @@ namespace Microsoft.Health.Fhir.Api.Controllers
         [AuditEventType(AuditEventSubType.Delete)]
         public async Task<IActionResult> Delete(string typeParameter, string idParameter, [FromQuery] bool hardDelete)
         {
-            DeleteResourceResponse response = await _mediator.DeleteResourceAsync(new ResourceKey(typeParameter, idParameter), hardDelete, HttpContext.RequestAborted);
+            DeleteResourceResponse response = await _mediator.DeleteResourceAsync(new ResourceKey(typeParameter, idParameter), hardDelete ? DeleteOperation.HardDelete : DeleteOperation.SoftDelete, HttpContext.RequestAborted);
 
             return FhirResult.NoContent().SetETagHeader(response.WeakETag);
+        }
+
+        /// <summary>
+        /// Deletes the specified resource's history, keeping the current version
+        /// </summary>
+        /// <param name="typeParameter">The type.</param>
+        /// <param name="idParameter">The identifier.</param>
+        [HttpDelete]
+        [Route(KnownRoutes.PurgeHistoryResourceTypeById)]
+        [AuditEventType(AuditEventSubType.Delete)]
+        public async Task<IActionResult> PurgeHistory(string typeParameter, string idParameter)
+        {
+            DeleteResourceResponse response = await _mediator.DeleteResourceAsync(new ResourceKey(typeParameter, idParameter), DeleteOperation.PurgeHistory, HttpContext.RequestAborted);
+
+            return FhirResult.NoContent().SetETagHeader(response.WeakETag);
+        }
+
+        /// <summary>
+        /// Deletes the specified resource
+        /// </summary>
+        /// <param name="typeParameter">The type.</param>
+        /// <param name="hardDelete">A flag indicating whether to hard-delete the resource or not.</param>
+        /// <param name="maxDeleteCount">Specifies the maximum number of resources that can be deleted.</param>
+        [HttpDelete]
+        [Route(KnownRoutes.ResourceType)]
+        [AuditEventType(AuditEventSubType.Delete)]
+        public async Task<IActionResult> ConditionalDelete(string typeParameter, [FromQuery] bool hardDelete, [FromQuery(Name = KnownQueryParameterNames.Count)] int? maxDeleteCount)
+        {
+            IReadOnlyList<Tuple<string, string>> conditionalParameters = GetQueriesForSearch();
+
+            DeleteResourceResponse response = await _mediator.Send(new ConditionalDeleteResourceRequest(typeParameter, conditionalParameters, hardDelete ? DeleteOperation.HardDelete : DeleteOperation.SoftDelete, maxDeleteCount.GetValueOrDefault(1)), HttpContext.RequestAborted);
+
+            if (maxDeleteCount.HasValue)
+            {
+                Response.Headers.Add(KnownHeaders.ItemsDeleted, (response?.ResourcesDeleted ?? 0).ToString(CultureInfo.InvariantCulture));
+            }
+
+            return FhirResult.NoContent().SetETagHeader(response?.WeakETag);
         }
 
         /// <summary>
